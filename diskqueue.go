@@ -59,29 +59,29 @@ type diskQueue struct {
 	// 64bit atomic vars need to be first for proper alignment on 32bit platforms
 
 	// run-time state (also persisted to disk)
-	readPos      int64
-	writePos     int64
-	readFileNum  int64
-	writeFileNum int64
-	depth        int64
+	readPos      int64 //reader pos
+	writePos     int64 //writer pos
+	readFileNum  int64 //readfile id
+	writeFileNum int64 //writefile id
+	depth        int64 //how much accumulate msgs 
 
 	sync.RWMutex
 
 	// instantiation time metadata
-	name            string
-	dataPath        string
-	maxBytesPerFile int64 // currently this cannot change once created
-	minMsgSize      int32
-	maxMsgSize      int32
+	name            string //filename
+	dataPath        string //filedir in disk
+	maxBytesPerFile int64 // currently this cannot change once created, file Max size
+	minMsgSize      int32 //msg min size
+	maxMsgSize      int32 //msg max size
 	syncEvery       int64         // number of writes per fsync
 	syncTimeout     time.Duration // duration of time per fsync
-	exitFlag        int32
-	needSync        bool
+	exitFlag        int32 //exit flag
+	needSync        bool  //need sync
 
 	// keeps track of the position where we have read
 	// (but not yet sent over readChan)
-	nextReadPos     int64
-	nextReadFileNum int64
+	nextReadPos     int64 //next read pos, store in diskQueue struct, just useing to persist metadata
+	nextReadFileNum int64 //next readfile num, store in diskQueue struct, just useing to persist metadata
 
 	readFile  *os.File
 	writeFile *os.File
@@ -92,12 +92,12 @@ type diskQueue struct {
 	readChan chan []byte
 
 	// internal channels
-	writeChan         chan []byte
-	writeResponseChan chan error
-	emptyChan         chan int
-	emptyResponseChan chan error
-	exitChan          chan int
-	exitSyncChan      chan int
+	writeChan         chan []byte //if you want write some data,send data to this channel
+	writeResponseChan chan error  //if you send data to writeChan, ioloop will write to file and return err
+	emptyChan         chan int    //if you want make queue empty, send signal to this chan
+	emptyResponseChan chan error  //if you want make queue empty, send signal to emptyChan and ioloop will return err result
+	exitChan          chan int    //if you want exit, just close this chan
+	exitSyncChan      chan int    //if you want exit, just close exitChan, and when finishd will sednd nitify to this chan
 
 	logf AppLogFunc
 }
@@ -125,7 +125,7 @@ func New(name string, dataPath string, maxBytesPerFile int64,
 		logf:              logf,
 	}
 
-	// no need to lock here, nothing else could possibly be touching this instance
+	// no need to lock here, nothing else could possibly be touching this instance, load metadata to memory
 	err := d.retrieveMetaData()
 	if err != nil && !os.IsNotExist(err) {
 		d.logf(ERROR, "DISKQUEUE(%s) failed to retrieveMetaData - %s", d.name, err)
